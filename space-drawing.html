@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>空間お絵かき プロトタイプ</title>
+  <!-- A-Frameという、HTMLだけで3D・ARが作れる仕組みを読み込みます -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+</head>
+<body style="margin:0;">
+
+  <!--
+    ここから <a-scene> が「舞台」です。
+    webxr の optionalFeatures に local-floor を書くと、
+    Quest側で「ARで開始」ボタンが出るようになります。
+  -->
+  <a-scene webxr="optionalFeatures: local-floor, hand-tracking;">
+
+    <!-- 右手のコントローラー。ここにお絵かき機能を付けます -->
+    <a-entity
+      id="rightHand"
+      oculus-touch-controls="hand: right"
+      draw-with-trigger>
+    </a-entity>
+
+    <!-- 左手のコントローラー（今回は何もしません、表示だけ） -->
+    <a-entity
+      id="leftHand"
+      oculus-touch-controls="hand: left">
+    </a-entity>
+
+    <!-- 描いた線をぜんぶここに入れていく「入れ物」 -->
+    <a-entity id="drawings"></a-entity>
+
+    <!-- 自分の視点（カメラ）。ARなので実際の部屋がそのまま背景になります -->
+    <a-camera></a-camera>
+
+  </a-scene>
+
+  <script>
+    /*
+      ここが「お絵かき」の心臓部分です。
+      やっていることはシンプルで、
+
+      1. トリガー（人差し指のボタン）を押している間、
+         コントローラーの位置を毎フレーム記録する
+      2. さっきの位置と今の位置を、細い棒（線）でつなぐ
+      3. それを描いた点の数だけ繰り返す
+
+      これを高速で繰り返すと、手の動きが「線」として
+      空間に残って見える、という仕組みです。
+    */
+    AFRAME.registerComponent('draw-with-trigger', {
+      init: function () {
+        this.isDrawing = false;
+        this.previousPoint = null;
+
+        // トリガーを押した瞬間
+        this.el.addEventListener('triggerdown', () => {
+          this.isDrawing = true;
+          this.previousPoint = null; // 新しい線をここから開始
+        });
+
+        // トリガーを離した瞬間
+        this.el.addEventListener('triggerup', () => {
+          this.isDrawing = false;
+          this.previousPoint = null;
+        });
+      },
+
+      // tick は「毎フレーム自動で呼ばれる」特別な関数です
+      tick: function () {
+        if (!this.isDrawing) return;
+
+        // 今のコントローラーの位置（現実の部屋の中でのxyz座標）を取得
+        const currentPoint = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(currentPoint);
+
+        if (this.previousPoint) {
+          // 前の点と今の点が近すぎる場合は線を増やさない（カクカク防止）
+          const distance = this.previousPoint.distanceTo(currentPoint);
+          if (distance > 0.01) {
+            this.drawSegment(this.previousPoint, currentPoint);
+            this.previousPoint = currentPoint.clone();
+          }
+        } else {
+          this.previousPoint = currentPoint.clone();
+        }
+      },
+
+      // 2点間に短い棒（線）を1本追加する関数
+      drawSegment: function (start, end) {
+        const drawings = document.querySelector('#drawings');
+        const segment = document.createElement('a-entity');
+
+        segment.setAttribute('line', {
+          start: `${start.x} ${start.y} ${start.z}`,
+          end: `${end.x} ${end.y} ${end.z}`,
+          color: '#FF5A5F' // 線の色。好きな色コードに変えてOK
+        });
+
+        drawings.appendChild(segment);
+      }
+    });
+  </script>
+
+</body>
+</html>
