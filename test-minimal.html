@@ -12,7 +12,12 @@
     一番シンプルなファイルです。お絵かき機能は一切入っていません。
     目の前1メートルくらいの場所に、赤い箱が1つ浮かんで見えれば成功です。
   -->
-  <a-scene webxr="optionalFeatures: local-floor;">
+  <!--
+    renderer="alpha: true;" が今回のポイントです。
+    これがないと、AR中でも背景が黒く塗りつぶされてしまい、
+    現実の部屋が透けて見えません。
+  -->
+  <a-scene webxr="optionalFeatures: local-floor;" renderer="alpha: true;" background="transparent: true;">
     <a-box position="0 1.5 -1" color="red" width="0.3" height="0.3" depth="0.3"></a-box>
     <a-camera></a-camera>
   </a-scene>
