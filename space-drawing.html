@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>空間お絵かき プロトタイプ</title>
   <!-- A-Frameという、HTMLだけで3D・ARが作れる仕組みを読み込みます -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
 </head>
 <body style="margin:0;">
 
@@ -12,8 +12,12 @@
     ここから <a-scene> が「舞台」です。
     webxr の optionalFeatures に local-floor を書くと、
     Quest側で「ARで開始」ボタンが出るようになります。
+
+    xr-mode-ui="XRMode: ar" が重要です。
+    これがないと、ボタンを押しても普通のVRモード（真っ黒な背景）で
+    始まってしまい、現実の部屋が見えません。
   -->
-  <a-scene webxr="optionalFeatures: local-floor, hand-tracking;">
+  <a-scene webxr="optionalFeatures: local-floor, hand-tracking;" xr-mode-ui="XRMode: ar">
 
     <!-- 右手のコントローラー。ここにお絵かき機能を付けます -->
     <a-entity
