@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>A-Frame ARテスト（最小構成）</title>
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
 </head>
 <body style="margin:0;">
 
@@ -13,11 +13,11 @@
     目の前1メートルくらいの場所に、赤い箱が1つ浮かんで見えれば成功です。
   -->
   <!--
-    renderer="alpha: true;" が今回のポイントです。
-    これがないと、AR中でも背景が黒く塗りつぶされてしまい、
-    現実の部屋が透けて見えません。
+    xr-mode-ui="XRMode: ar" がポイントです。
+    これを書かないと、ボタンを押しても普通のVRモード（現実が見えない黒い背景）
+    で始まってしまいます。ARモードで始めるにはこの指定が必須です。
   -->
-  <a-scene webxr="optionalFeatures: local-floor;" renderer="alpha: true;" background="transparent: true;">
+  <a-scene webxr="optionalFeatures: local-floor;" xr-mode-ui="XRMode: ar">
     <a-box position="0 1.5 -1" color="red" width="0.3" height="0.3" depth="0.3"></a-box>
     <a-camera></a-camera>
   </a-scene>
