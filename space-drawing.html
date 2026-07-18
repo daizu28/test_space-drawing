@@ -17,12 +17,11 @@
     これがないと、ボタンを押しても普通のVRモード（真っ黒な背景）で
     始まってしまい、現実の部屋が見えません。
 
-    dom-overlay を追加すると、AR中でも画面手前に
-    普通のHTML（入力欄やボタン）を重ねて表示できます。
-    overlayElement で「どのHTML要素を重ねて表示するか」を指定します。
+    (dom-overlayはQuestのブラウザで正式対応していないため使いません。
+    代わりに左手トリガー→音声入力という方式にしています。)
   -->
   <a-scene
-    webxr="optionalFeatures: local-floor, hand-tracking, dom-overlay; overlayElement: #overlay;"
+    webxr="optionalFeatures: local-floor, hand-tracking;"
     xr-mode-ui="XRMode: ar">
 
     <!-- 右手のコントローラー。ここにお絵かき機能を付けます -->
@@ -32,10 +31,13 @@
       draw-with-trigger>
     </a-entity>
 
-    <!-- 左手のコントローラー（今回は何もしません、表示だけ） -->
+    <!-- 左手のコントローラー。ここに「音声で付箋を置く」機能を付けます -->
     <a-entity
       id="leftHand"
-      oculus-touch-controls="hand: left">
+      oculus-touch-controls="hand: left"
+      voice-note-with-trigger>
+      <!-- トリガーを押している間、赤い小さな球が浮かんで「録音中」を知らせます -->
+      <a-sphere id="listeningIndicator" radius="0.02" color="red" visible="false" position="0 0.05 0"></a-sphere>
     </a-entity>
 
     <!-- 描いた線をぜんぶここに入れていく「入れ物」 -->
@@ -48,32 +50,6 @@
     <a-camera></a-camera>
 
   </a-scene>
-
-  <!--
-    ここが「付箋を作るためのUI」です。
-    dom-overlay のおかげで、AR中でもこの部分が
-    普通のWebページのように画面手前に表示されます。
-    入力欄をタップするとQuest標準のキーボードが出てきます。
-  -->
-  <div id="overlay" style="
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      background: rgba(0,0,0,0.6);
-      padding: 12px;
-      border-radius: 12px;
-      font-family: sans-serif;
-    ">
-    <input id="noteInput" type="text" placeholder="付箋の文字を入力"
-      style="font-size: 18px; padding: 8px; border-radius: 8px; border: none; width: 240px;">
-    <button id="placeNoteButton"
-      style="font-size: 18px; padding: 8px 16px; border-radius: 8px; border: none; background: #FF5A5F; color: white;">
-      この位置に置く
-    </button>
-  </div>
 
   <script>
     /*
@@ -142,45 +118,84 @@
     });
 
     /*
-      ここが「付箋を置く」機能です。
+      ここが「音声で付箋を置く」機能です。
       やっていることはシンプルで、
 
-      1. 「この位置に置く」ボタンが押されたら
-      2. 入力欄に書いてある文字を読み取る
-      3. 右手コントローラーの今の位置に、
-         背景付きの文字（付箋っぽい見た目）を1つ配置する
-      4. 入力欄を空にして、次の付箋を打てるようにする
+      1. 左手のトリガーを押す
+      2. マイクが起動して、赤い球が光って「聞いています」と知らせる
+      3. 何かを喋ると、その内容が文字として認識される
+      4. 認識できた文字を、右手コントローラーの今の位置に付箋として置く
+
+      音声認識には Web Speech API という、ブラウザ標準の機能を使います。
+      対応していないブラウザだと動かないので、その場合は
+      画面下にエラーメッセージが出るようにしています(デバッグ用)。
     */
-    document.querySelector('#placeNoteButton').addEventListener('click', () => {
-      const input = document.querySelector('#noteInput');
-      const text = input.value.trim();
-      if (text === '') return; // 何も書いていなければ何もしない
+    AFRAME.registerComponent('voice-note-with-trigger', {
+      init: function () {
+        // ブラウザが音声認識に対応しているか確認
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-      // 右手コントローラーの現在位置を取得
-      const rightHand = document.querySelector('#rightHand');
-      const position = new THREE.Vector3();
-      rightHand.object3D.getWorldPosition(position);
+        if (!SpeechRecognition) {
+          console.warn('このブラウザは音声認識(Web Speech API)に対応していません');
+          return;
+        }
 
-      // 付箋の入れ物になる entity を1つ作る
-      const note = document.createElement('a-entity');
-      note.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+        this.recognition = new SpeechRecognition();
+        this.recognition.lang = 'ja-JP'; // 日本語で認識する
+        this.recognition.continuous = false; // 一言喋ったら自動で終わる
+        this.recognition.interimResults = false;
 
-      // 付箋の背景（黄色い板）
-      note.setAttribute('geometry', 'primitive: plane; width: 0.4; height: 0.3');
-      note.setAttribute('material', 'color: #FFF176; side: double');
+        const indicator = this.el.querySelector('#listeningIndicator');
 
-      // 常にユーザーの方を向くようにする(billboard的な動き)
-      note.setAttribute('look-at', '[camera]');
+        // 認識できた文字が返ってきたときの処理
+        this.recognition.addEventListener('result', (event) => {
+          const text = event.results[0][0].transcript;
+          this.placeNote(text);
+        });
 
-      // 文字本体
-      const textEl = document.createElement('a-entity');
-      textEl.setAttribute('text', `value: ${text}; color: #333; width: 0.7; align: center; wrapCount: 20;`);
-      textEl.setAttribute('position', '0 0 0.01'); // 板より少し手前に文字を置く
-      note.appendChild(textEl);
+        // 認識が終わったら(成功でも失敗でも)赤い球を消す
+        this.recognition.addEventListener('end', () => {
+          indicator.setAttribute('visible', false);
+        });
 
-      document.querySelector('#notes').appendChild(note);
+        this.recognition.addEventListener('error', (event) => {
+          console.warn('音声認識エラー:', event.error);
+        });
 
-      input.value = ''; // 入力欄を空にする
+        // 左手トリガーを押した瞬間に音声認識をスタート
+        this.el.addEventListener('triggerdown', () => {
+          indicator.setAttribute('visible', true);
+          this.recognition.start();
+        });
+      },
+
+      // 認識した文字を、右手コントローラーの位置に付箋として置く関数
+      placeNote: function (text) {
+        if (!text || text.trim() === '') return;
+
+        const rightHand = document.querySelector('#rightHand');
+        const position = new THREE.Vector3();
+        rightHand.object3D.getWorldPosition(position);
+
+        // 付箋の入れ物になる entity を1つ作る
+        const note = document.createElement('a-entity');
+        note.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+
+        // 付箋の背景(黄色い板)
+        note.setAttribute('geometry', 'primitive: plane; width: 0.4; height: 0.3');
+        note.setAttribute('material', 'color: #FFF176; side: double');
+
+        // 常にユーザーの方を向くようにする(billboard的な動き)
+        note.setAttribute('look-at', '[camera]');
+
+        // 文字本体
+        const textEl = document.createElement('a-entity');
+        textEl.setAttribute('text', `value: ${text}; color: #333; width: 0.7; align: center; wrapCount: 20;`);
+        textEl.setAttribute('position', '0 0 0.01'); // 板より少し手前に文字を置く
+        note.appendChild(textEl);
+
+        document.querySelector('#notes').appendChild(note);
+      }
     });
   </script>
 
