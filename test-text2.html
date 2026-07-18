@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>文字表示テスト2</title>
+  <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
+</head>
+<body style="margin:0;">
+
+  <a-scene webxr="optionalFeatures: local-floor;" xr-mode-ui="XRMode: ar">
+    <a-camera></a-camera>
+  </a-scene>
+
+  <script>
+    /*
+      A-Frame標準のtextコンポーネントは、Questのパススルー(AR)中に
+      文字の縁が半透明に描画される仕組みのため、透けて消えてしまうことがあります。
+
+      そこで、この方法では
+      1. 目に見えない「キャンバス」に文字を描く(お絵かきソフトのような下書き)
+      2. それを1枚の画像として、不透明な板に貼り付ける
+      という手順で、確実に文字を表示します。
+    */
+    function createTextPlane(text) {
+      // 1. キャンバスを作って、そこに文字を描く
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      // 背景(黄色い付箋の色)
+      ctx.fillStyle = '#FFF176';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 文字(黒色、中央寄せ)
+      ctx.fillStyle = '#333333';
+      ctx.font = 'bold 60px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+      // 2. このキャンバスを、three.jsの「テクスチャ(貼り付け用画像)」に変換する
+      const texture = new THREE.CanvasTexture(canvas);
+
+      // 3. 板(プレーン)を作って、そのテクスチャを貼り付ける
+      const geometry = new THREE.PlaneGeometry(0.4, 0.2);
+      const material = new THREE.MeshBasicMaterial({ map: texture });
+      const mesh = new THREE.Mesh(geometry, material);
+
+      return mesh;
+    }
+
+    // シーンが準備できたら、テスト用の板を1枚出す
+    document.querySelector('a-scene').addEventListener('loaded', () => {
+      const scene = document.querySelector('a-scene').object3D;
+      const plane = createTextPlane('テスト成功');
+      plane.position.set(0, 1.5, -1);
+      scene.add(plane);
+    });
+  </script>
+
+</body>
+</html>
