@@ -16,8 +16,14 @@
     xr-mode-ui="XRMode: ar" が重要です。
     これがないと、ボタンを押しても普通のVRモード（真っ黒な背景）で
     始まってしまい、現実の部屋が見えません。
+
+    dom-overlay を追加すると、AR中でも画面手前に
+    普通のHTML（入力欄やボタン）を重ねて表示できます。
+    overlayElement で「どのHTML要素を重ねて表示するか」を指定します。
   -->
-  <a-scene webxr="optionalFeatures: local-floor, hand-tracking;" xr-mode-ui="XRMode: ar">
+  <a-scene
+    webxr="optionalFeatures: local-floor, hand-tracking, dom-overlay; overlayElement: #overlay;"
+    xr-mode-ui="XRMode: ar">
 
     <!-- 右手のコントローラー。ここにお絵かき機能を付けます -->
     <a-entity
@@ -35,10 +41,39 @@
     <!-- 描いた線をぜんぶここに入れていく「入れ物」 -->
     <a-entity id="drawings"></a-entity>
 
+    <!-- 置いた付箋をぜんぶここに入れていく「入れ物」 -->
+    <a-entity id="notes"></a-entity>
+
     <!-- 自分の視点（カメラ）。ARなので実際の部屋がそのまま背景になります -->
     <a-camera></a-camera>
 
   </a-scene>
+
+  <!--
+    ここが「付箋を作るためのUI」です。
+    dom-overlay のおかげで、AR中でもこの部分が
+    普通のWebページのように画面手前に表示されます。
+    入力欄をタップするとQuest標準のキーボードが出てきます。
+  -->
+  <div id="overlay" style="
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(0,0,0,0.6);
+      padding: 12px;
+      border-radius: 12px;
+      font-family: sans-serif;
+    ">
+    <input id="noteInput" type="text" placeholder="付箋の文字を入力"
+      style="font-size: 18px; padding: 8px; border-radius: 8px; border: none; width: 240px;">
+    <button id="placeNoteButton"
+      style="font-size: 18px; padding: 8px 16px; border-radius: 8px; border: none; background: #FF5A5F; color: white;">
+      この位置に置く
+    </button>
+  </div>
 
   <script>
     /*
@@ -104,6 +139,48 @@
 
         drawings.appendChild(segment);
       }
+    });
+
+    /*
+      ここが「付箋を置く」機能です。
+      やっていることはシンプルで、
+
+      1. 「この位置に置く」ボタンが押されたら
+      2. 入力欄に書いてある文字を読み取る
+      3. 右手コントローラーの今の位置に、
+         背景付きの文字（付箋っぽい見た目）を1つ配置する
+      4. 入力欄を空にして、次の付箋を打てるようにする
+    */
+    document.querySelector('#placeNoteButton').addEventListener('click', () => {
+      const input = document.querySelector('#noteInput');
+      const text = input.value.trim();
+      if (text === '') return; // 何も書いていなければ何もしない
+
+      // 右手コントローラーの現在位置を取得
+      const rightHand = document.querySelector('#rightHand');
+      const position = new THREE.Vector3();
+      rightHand.object3D.getWorldPosition(position);
+
+      // 付箋の入れ物になる entity を1つ作る
+      const note = document.createElement('a-entity');
+      note.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+
+      // 付箋の背景（黄色い板）
+      note.setAttribute('geometry', 'primitive: plane; width: 0.4; height: 0.3');
+      note.setAttribute('material', 'color: #FFF176; side: double');
+
+      // 常にユーザーの方を向くようにする(billboard的な動き)
+      note.setAttribute('look-at', '[camera]');
+
+      // 文字本体
+      const textEl = document.createElement('a-entity');
+      textEl.setAttribute('text', `value: ${text}; color: #333; width: 0.7; align: center; wrapCount: 20;`);
+      textEl.setAttribute('position', '0 0 0.01'); // 板より少し手前に文字を置く
+      note.appendChild(textEl);
+
+      document.querySelector('#notes').appendChild(note);
+
+      input.value = ''; // 入力欄を空にする
     });
   </script>
 
