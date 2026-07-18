@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>文字表示テスト</title>
+  <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
+</head>
+<body style="margin:0;">
+
+  <!--
+    これは「A-Frameのtextコンポーネントがこの環境で見えるか」だけを
+    確認するための最小ファイルです。
+    目の前に「テスト成功」という黒い文字と、赤い背景の板が見えれば成功です。
+  -->
+  <a-scene webxr="optionalFeatures: local-floor;" xr-mode-ui="XRMode: ar">
+
+    <!-- 背景の板(これが見えないなら、そもそもARが動いていない) -->
+    <a-plane position="0 1.5 -1" width="0.6" height="0.4" color="red"></a-plane>
+
+    <!-- 文字(これが見えないなら、textコンポーネントの問題) -->
+    <a-entity
+      text="value: テスト成功; color: black; align: center; width: 1.5;"
+      position="0 1.5 -0.99">
+    </a-entity>
+
+    <a-camera></a-camera>
+  </a-scene>
+
+</body>
+</html>
