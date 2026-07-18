@@ -29,8 +29,8 @@
       id="leftHand"
       oculus-touch-controls="hand: left"
       cycle-note-word>
-      <!-- 今選ばれている単語が、左手の上に浮かんで見えます -->
-      <a-entity id="wordPreview" text="value: TODO; color: white; align: center; width: 1.2;" position="0 0.08 0"></a-entity>
+      <!-- 今選ばれている単語が、左手の上に浮かんで見えます(中身はJSで作ります) -->
+      <a-entity id="wordPreview" position="0 0.08 0"></a-entity>
     </a-entity>
 
     <!-- 右手のコントローラー。トリガーで線を描き、グリップ（握るボタン）で付箋を置きます -->
@@ -120,12 +120,43 @@
 
 
     /*
+      ここが「文字入りの板」を作る共通の道具です。
+      A-Frame標準のtextコンポーネントは、Questのパススルー(AR)中に
+      文字の縁が半透明に描画される仕組みのため、透けて消えてしまうことがあります。
+
+      そこで、この方法では
+      1. 目に見えない「キャンバス」に文字を描く(お絵かきソフトのような下書き)
+      2. それを1枚の画像として、不透明な板に貼り付ける
+      という手順で、確実に文字を表示します。
+    */
+    function createTextPlane(text, backgroundColor, width, height) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#333333';
+      ctx.font = 'bold 60px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const geometry = new THREE.PlaneGeometry(width, height);
+      const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+      return new THREE.Mesh(geometry, material);
+    }
+
+    /*
       ここが「単語を切り替える」機能です(左手担当)。
       やっていることはシンプルで、
 
       1. あらかじめ5つの単語を用意しておく
       2. 左手のトリガーを押すたびに、次の単語に切り替わる
-      3. 今選ばれている単語は、左手の上に浮かぶ文字で確認できる
+      3. 今選ばれている単語は、左手の上に浮かぶ文字入り板で確認できる
     */
     AFRAME.registerComponent('cycle-note-word', {
       init: function () {
@@ -137,13 +168,23 @@
         // window(グローバルな置き場所)に保存しておきます
         window.currentNoteWord = this.words[this.currentIndex];
 
-        const preview = this.el.querySelector('#wordPreview');
+        this.updatePreview();
 
         this.el.addEventListener('triggerdown', () => {
           this.currentIndex = (this.currentIndex + 1) % this.words.length;
           window.currentNoteWord = this.words[this.currentIndex];
-          preview.setAttribute('text', 'value', window.currentNoteWord);
+          this.updatePreview();
         });
+      },
+
+      // プレビュー板を、今の単語で作り直す(前の板は消してから作り直します)
+      updatePreview: function () {
+        const previewContainer = this.el.querySelector('#wordPreview');
+        while (previewContainer.object3D.children.length > 0) {
+          previewContainer.object3D.remove(previewContainer.object3D.children[0]);
+        }
+        const plane = createTextPlane(window.currentNoteWord, '#FFFFFF', 0.15, 0.075);
+        previewContainer.object3D.add(plane);
       }
     });
 
@@ -169,24 +210,16 @@
         const position = new THREE.Vector3();
         this.el.object3D.getWorldPosition(position);
 
-        // 付箋の入れ物になる entity を1つ作る
+        // 付箋の入れ物になる entity を1つ作る(向きを自動で自分の方に向けるため)
         const note = document.createElement('a-entity');
         note.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
-
-        // 付箋の背景(黄色い板)
-        note.setAttribute('geometry', 'primitive: plane; width: 0.4; height: 0.3');
-        note.setAttribute('material', 'color: #FFF176; side: double');
-
-        // 常にユーザーの方を向くようにする(billboard的な動き)
         note.setAttribute('look-at', '[camera]');
 
-        // 文字本体
-        const textEl = document.createElement('a-entity');
-        textEl.setAttribute('text', `value: ${text}; color: #333; width: 0.7; align: center; wrapCount: 20;`);
-        textEl.setAttribute('position', '0 0 0.01'); // 板より少し手前に文字を置く
-        note.appendChild(textEl);
-
         document.querySelector('#notes').appendChild(note);
+
+        // 文字入りの板(canvasテクスチャ)を、その中に追加する
+        const plane = createTextPlane(text, '#FFF176', 0.4, 0.2);
+        note.object3D.add(plane);
       }
     });
   </script>
